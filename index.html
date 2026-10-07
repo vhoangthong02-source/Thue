@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Ôn tập Hình học - Hệ Thống Tứ Giác</title>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/neo4j-driver"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { display: flex; flex-direction: column; margin: 0; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; height: 100vh; background: #f8fafc; overflow: hidden; }
+    
+    header {
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      color: white;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      z-index: 10;
+    }
+    header h1 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: 0.5px; }
+
+    .main-container { display: flex; flex: 1; height: calc(100vh - 46px); }
+    #network { flex: 52; height: 100%; border-right: 2px solid #e2e8f0; background: #ffffff; }
+    #panel { flex: 48; height: 100%; display: flex; flex-direction: column; background: #ffffff; box-shadow: -4px 0 16px rgba(0,0,0,0.04); }
+
+    .tab-bar { display: flex; border-bottom: 2px solid #e2e8f0; background: #f8fafc; }
+    .tab-btn { flex: 1; padding: 11px; border: none; background: none; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { color: #1e3a8a; background: #ffffff; border-bottom: 3px solid #2563eb; }
+    
+    .tab-content { flex: 1; padding: 16px 20px; overflow-y: auto; }
+
+    /* MÔ PHỎNG ĐỘNG */
+    .sim-header { margin-bottom: 8px; }
+    .sim-title { font-weight: 700; font-size: 15px; color: #ea580c; display: flex; align-items: center; gap: 6px; }
+    .sim-desc { font-size: 12px; color: #64748b; margin-top: 2px; }
+    
+    .preset-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .btn-preset { padding: 5px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #1e293b; color: white; font-size: 12px; cursor: pointer; font-weight: 600; transition: all 0.15s; }
+    .btn-preset:hover { background: #2563eb; border-color: #2563eb; transform: translateY(-1px); }
+
+    #canvas-container { position: relative; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #ffffff; width: 100%; height: 230px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+    canvas { display: block; cursor: crosshair; }
+
+    .sim-status { margin-top: 8px; padding: 8px 12px; border-radius: 6px; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .sim-badge { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+    .sim-metrics { font-family: 'Consolas', monospace; font-size: 12px; color: #475569; }
+
+    /* BỘ NHẬP CẠNH TỰ ĐỘNG TÍNH TOÁN */
+    .calc-box {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 12px;
+    }
+    .calc-header { font-weight: 700; color: #166534; font-size: 13px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .input-item label { display: block; font-size: 11px; font-weight: 700; color: #374151; margin-bottom: 2px; }
+    .input-item input { width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 13px; font-weight: 600; }
+    .input-item input:focus { outline: none; border-color: #16a34a; background: #ffffff; }
+
+    .calc-results {
+      background: #ffffff;
+      border: 1px solid #86efac;
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-around;
+      font-size: 13px;
+      font-weight: 700;
+      color: #15803d;
+    }
+
+    .section-title { font-weight: 700; color: #0f172a; margin-top: 14px; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .formula-box { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 6px 12px; margin: 4px 0; border-radius: 4px; font-family: monospace; font-size: 12px; color: #1e293b; }
+    ul { margin: 4px 0 8px 18px; padding: 0; font-size: 13px; color: #334155; }
+    li { margin-bottom: 3px; }
+
+    /* Quiz Tab */
+    .quiz-question-box { background: #f8fafc; border: 2px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 14px; }
+    .quiz-opt-btn { padding: 10px; border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; width: 100%; margin-top: 6px; }
+    .quiz-opt-btn.correct { background: #dcfce7 !important; border-color: #22c55e !important; color: #15803d; }
+    .quiz-opt-btn.wrong { background: #fee2e2 !important; border-color: #ef4444 !important; color: #b91c1c; }
+    .quiz-feedback { padding: 10px; border-radius: 6px; font-size: 12px; margin-top: 8px; display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🎓 ÔN TẬP HÌNH HỌC <span>— Mô Hình Hoá Tứ Giác</span></h1>
+    <div style="font-size: 12px; opacity: 0.9;">Nhập Cạnh Tự Tính & Kéo Đỉnh Động Trực Quan</div>
+  </header>
+
+  <div class="main-container">
+    <div id="network"></div>
+
+    <div id="panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="btnTabDetail" onclick="switchTab('detail')">✏️ Mô phỏng & Nhập cạnh</button>
+        <button class="tab-btn" id="btnTabQuiz" onclick="switchTab('quiz')">🎯 Đố vui Đoán hình</button>
+      </div>
+
+      <div id="tabDetail" class="tab-content">
+        <div class="sim-header">
+          <div class="sim-title">✏️ Mô phỏng hình động & Nhập cạnh tự tính</div>
+          <div class="sim-desc">Bạn có thể <strong>kéo các đỉnh</strong> bằng chuột HOẶC <strong>nhập cạnh vào ô bên dưới</strong> để hình tự động vẽ và tính toán. Thước đo: 1 ô = 1 cm.</div>
+        </div>
+
+        <div class="preset-bar">
+          <button class="btn-preset" onclick="setShapePreset('square')">Hình vuông</button>
+          <button class="btn-preset" onclick="setShapePreset('rectangle')">Chữ nhật</button>
+          <button class="btn-preset" onclick="setShapePreset('rhombus')">Hình thoi</button>
+          <button class="btn-preset" onclick="setShapePreset('parallelogram')">Bình hành</button>
+          <button class="btn-preset" onclick="setShapePreset('trapezoid')">Hình thang</button>
+          <button class="btn-preset" onclick="setShapePreset('isosceles_trapezoid')">Thang cân</button>
+          <button class="btn-preset" onclick="setShapePreset('kite')">Hình diều</button>
+          <button class="btn-preset" onclick="setShapePreset('quadrilateral')">Tứ giác lồi</button>
+        </div>
+
+        <div id="canvas-container">
+          <canvas id="geoCanvas" width="540" height="230"></canvas>
+        </div>
+
+        <div class="sim-status">
+          <div id="simBadge" class="sim-badge" style="color: #2563eb;">--</div>
+          <div id="simMetrics" class="sim-metrics">AB=0 BC=0 CD=0 DA=0 cm — P=0 cm — S=0 cm²</div>
+          <div id="simExplain" style="font-size: 11px; color:#64748b; margin-top:2px;"></div>
+        </div>
+
+        <!-- KHUNG NHẬP CẠNH TỰ ĐỘNG TÍNH TOÁN -->
+        <div class="calc-box">
+          <div class="calc-header">
+            <span>🧮 Nhập thông số cạnh (Tự động vẽ & tính)</span>
+            <span id="calcShapeName" style="color:#15803d; font-size:12px;"></span>
+          </div>
+          <div id="calcInputs" class="input-grid"></div>
+          <div class="calc-results">
+            <div>Chu vi (P): <span id="calcP" style="color:#b91c1c;">--</span></div>
+            <div>Diện tích (S): <span id="calcS" style="color:#b91c1c;">--</span></div>
+          </div>
+        </div>
+
+        <div id="neo4jInfo">
+          <div class="section-title">📖 Định nghĩa & Tính chất (từ Neo4j):</div>
+          <div id="neoDefinition" style="font-size: 13px; color:#475569;">Nhấn vào một hình trên đồ thị bên trái để xem lý thuyết tương ứng.</div>
+          <div class="section-title">📐 Công thức:</div>
+          <div class="formula-box" id="neoPerimeter">Chu vi: P = a + b + c + d</div>
+          <div class="formula-box" id="neoArea">Diện tích: S = ...</div>
+          <div class="section-title">✨ Dấu hiệu nhận biết:</div>
+          <ul id="neoSigns"></ul>
+        </div>
+      </div>
+
+      <div id="tabQuiz" class="tab-content" style="display: none;">
+        <div class="quiz-question-box">
+          <span style="font-size: 12px; color: #64748b; font-weight: bold;">HỎI: Dựa vào tính chất sau, đây là hình gì?</span>
+          <div id="qText" style="font-weight: 600; color: #1e3a8a; margin-top: 4px;">--</div>
+        </div>
+        <div id="qOptions" style="margin-top: 8px;"></div>
+        <div id="qFeedback" class="quiz-feedback"></div>
+        <button id="btnNextQuiz" onclick="loadNextQuestion()" style="margin-top:10px; padding:6px 14px; background:#2563eb; color:white; border:none; border-radius:4px; cursor:pointer; display:none;">Câu tiếp theo ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const URI = "neo4j+s://e7c63045.databases.neo4j.io";
+    const USER = "e7c63045";
+    // ⚠️ ĐIỀN MẬT KHẨU CỦA BẠN VÀO ĐÂY:
+    const PASSWORD = "2TsDHPUkzhmNz0PYRJfZjAdsJmnPynzhJGYhkIL998Q"; 
+
+    const driver = neo4j.driver(URI, neo4j.auth.basic(USER, PASSWORD));
+
+    const shapeHierarchy = {
+      quadrilateral:       { level: 0, bg: "#f8fafc", border: "#475569", text: "#0f172a" },
+      trapezoid:           { level: 1, bg: "#fff7ed", border: "#ea580c", text: "#9a3412" },
+      isosceles_trapezoid: { level: 2, bg: "#fffbeb", border: "#d97706", text: "#b45309" },
+      parallelogram:       { level: 2, bg: "#faf5ff", border: "#9333ea", text: "#6b21a8" },
+      rectangle:           { level: 3, bg: "#eff6ff", border: "#2563eb", text: "#1d4ed8" },
+      rhombus:             { level: 3, bg: "#f0fdf4", border: "#16a34a", text: "#15803d" },
+      square:              { level: 4, bg: "#fef2f2", border: "#dc2626", text: "#991b1b" }
+    };
+
+    let allNodesMap = new Map();
+    let currentShapeType = "rectangle";
+
+    async function loadGraphData() {
+      const session = driver.session();
+      try {
+        const result = await session.run(`
+          MATCH (n:Quadrilateral)
+          OPTIONAL MATCH (n)-[r:SPECIALIZES_TO]->(m:Quadrilateral)
+          RETURN n, r, m
+        `);
+
+        const edges = [];
+        result.records.forEach(record => {
+          const n = record.get('n');
+          const r = record.get('r');
+          const m = record.get('m');
+
+          if (!allNodesMap.has(n.properties.id)) {
+            allNodesMap.set(n.properties.id, n.properties);
+          }
+
+          if (m && r) {
+            edges.push({
+              from: n.properties.id,
+              to: m.properties.id,
+              arrows: { to: { enabled: true, scaleFactor: 0.8 } },
+              label: r.properties.condition,
+              font: { size: 10, align: 'horizontal', color: '#475569', background: '#ffffff', strokeWidth: 0 },
+              color: { color: '#94a3b8', highlight: '#1e3a8a', hover: '#2563eb' },
+              width: 1.5,
+              smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.45 }
+            });
+          }
+        });
+
+        const nodesData = Array.from(allNodesMap.values()).map(p => {
+          const conf = shapeHierarchy[p.id] || { level: 0, bg: "#ffffff", border: "#3b82f6", text: "#000" };
+          return {
+            id: p.id,
+            label: p.name_vi,
+            level: conf.level,
+            shape: "box",
+            widthConstraint: { minimum: 110, maximum: 130 },
+            margin: { top: 10, bottom: 10, left: 8, right: 8 },
+            shapeProperties: { borderRadius: 8 },
+            color: { background: conf.bg, border: conf.border, highlight: { background: conf.bg, border: "#1e3a8a" }, hover: { background: "#ffffff", border: conf.border } },
+            borderWidth: 2,
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.06)', size: 8, x: 2, y: 3 },
+            font: { size: 13, bold: true, color: conf.text }
+          };
+        });
+
+        const container = document.getElementById("network");
+        const data = { nodes: new vis.DataSet(nodesData), edges: new vis.DataSet(edges) };
+        const options = {
+          layout: { hierarchical: { direction: "LR", sortMethod: "directed", levelSeparation: 210, nodeSpacing: 90, parentCentralization: true } },
+          physics: { hierarchicalRepulsion: { nodeDistance: 150 }, stabilization: { iterations: 100 } },
+          interaction: { hover: true, zoomView: true, dragView: true }
+        };
+
+        const network = new vis.Network(container, data, options);
+
+        network.on("click", function(params) {
+          if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+            switchTab('detail');
+            setShapePreset(nodeId);
+          }
+        });
+
+      } catch (e) {
+        console.error(e);
+      } finally {
+        await session.close();
+      }
+    }
+
+    function updateTheoryInfo(shapeId) {
+      const data = allNodesMap.get(shapeId);
+      if (!data) return;
+      document.getElementById("neoDefinition").innerText = data.definition;
+      document.getElementById("neoPerimeter").innerHTML = `<strong>Chu vi:</strong> ${data.perimeter_formula}`;
+      document.getElementById("neoArea").innerHTML = `<strong>Diện tích:</strong> ${data.area_formula}`;
+      document.getElementById("neoSigns").innerHTML = data.identification_signs.map(s => `<li>${s}</li>`).join("");
+    }
+
+    // ==========================================
+    // MÔ PHỎNG CANVAS & TÍNH TOÁN 2 CHIỀU
+    // ==========================================
+    const canvas = document.getElementById("geoCanvas");
+    const ctx = canvas.getContext("2d");
+    const GRID_SIZE = 40;
+
+    let pts = [
+      { x: 120, y: 180, label: "A" },
+      { x: 120, y: 70,  label: "D" },
+      { x: 360, y: 70,  label: "C" },
+      { x: 360, y: 180, label: "B" }
+    ];
+
+    let draggingIdx = -1;
+
+    // Dựng sẵn form nhập số liệu tương ứng với từng hình
+    function setupCalculatorInputs(type) {
+      currentShapeType = type;
+      const box = document.getElementById("calcInputs");
+      const nameEl = document.getElementById("calcShapeName");
+      
+      let html = '';
+      if (type === 'square') {
+        nameEl.innerText = "[Hình vuông]";
+        html = `<div class="input-item"><label>Cạnh a (cm):</label><input type="number" id="in_a" value="3.5" step="0.5" min="1" max="5.5" oninput="applyInputsToShape()"></div>`;
+      } else if (type === 'rectangle') {
+        nameEl.innerText = "[Hình chữ nhật]";
+        html = `
+          <div class="input-item"><label>Chiều dài a (cm):</label><input type="number" id="in_a" value="6" step="0.5" min="2" max="9" oninput="applyInputsToShape()"></div>
+          <div class="input-item"><label>Chiều rộng b (cm):</label><input type="number" id="in_b" value="3" step="0.5" min="1" max="4.5" oninput="applyInputsToShape()"></div>`;
+      } else if (type === 'parallelogram') {
+        nameEl.innerText = "[Hình bình hành]";
+        html = `
+          <div class="input-item"><label>Đáy a (cm):</label><input type="number" id="in_a" value="5.5" step="0.5" min="2" max="8" oninput="applyInputsToShape()"></div>
+          <div class="input-item"><label>Cạnh bên b (cm):</label><input type="number" id="in_b" value="3.5" step="0.5" min="2" max="5" oninput="applyInputsToShape()"></div>
+          <div class="input-item"><label>Chiều cao h (cm):</label><input type="number" id="in_h" value="3" step="0.5" min="1" max="4" oninput="applyInputsToShape()"></div>`;
+      } else if (type === 'rhombus') {
+        nameEl.innerText = "[Hình thoi]";
+        html = `
+          <div class="input-item"><label>Đường chéo d1 (cm):</label><input type="number" id="in_d1" value="6" step="0.5" min="2" max="9" oninput="applyInputsToShape()"></div>
+          <div class="input-item"><label>Đường chéo d2 (cm):</label><input type="number" id="in_d2" value="4" step="0.5" min="2" max="5" oninput="applyInputsToShape()"></div>`;
+      } else if (type === 'trapezoid' || type === 'isosceles_trapezoid') {
+        nameEl.innerText = type === 'trapezoid' ? "[Hình thang]" : "[Hình thang cân]";
+        html = `
+          <div class="input-item"><label>Đáy bé a (cm):</label><input type="number" id="in_a" value="4" step="0.5" min="1" max="6" oninput="applyInputsToShape()"></div>
+          <div class="input-item"><label>Đáy lớn b (cm):</label><input type="number" id="in_b" value="7" step="0.5" min="3" max="9" oninput="applyInputsToShape()"></div>
+          <div class="input-item"><label>Chiều cao h (cm):</label><input type="number" id="in_h" value="3" step="0.5" min="1" max="4.5" oninput="applyInputsToShape()"></div>`;
+      } else {
+        nameEl.innerText = "[Tứ giác lồi]";
+        html = `
+          <div class="input-item"><label>Cạnh a (cm):</label><input type="number" id="in_a" value="4" step="0.5" oninput="calculateCustomQuad()"></div>
+          <div class="input-item"><label>Cạnh b (cm):</label><input type="number" id="in_b" value="5" step="0.5" oninput="calculateCustomQuad()"></div>
+          <div class="input-item"><label>Cạnh c (cm):</label><input type="number" id="in_c" value="6" step="0.5" oninput="calculateCustomQuad()"></div>
+          <div class="input-item"><label>Cạnh d (cm):</label><input type="number" id="in_d" value="3.5" step="0.5" oninput="calculateCustomQuad()"></div>`;
+      }
+      box.innerHTML = html;
+      applyInputsToShape();
+    }
+
+    // ĐỌC THÔNG SỐ VỪA NHẬP VÀ VẼ LẠI HÌNH ĐỒNG THỜI TỰ TÍNH TOÁN
+    function applyInputsToShape() {
+      const getVal = id => parseFloat(document.getElementById(id)?.value) || 0;
+      const cx = 270, cy = 120; // Tâm canvas
+
+      if (currentShapeType === 'square') {
+        const a = getVal('in_a');
+        const px = a * GRID_SIZE;
+        pts = [
+          { x: cx - px/2, y: cy + px/2, label: "A" },
+          { x: cx - px/2, y: cy - px/2, label: "D" },
+          { x: cx + px/2, y: cy - px/2, label: "C" },
+          { x: cx + px/2, y: cy + px/2, label: "B" }
+        ];
+        document.getElementById("calcP").innerText = `${(4 * a).toFixed(2)} cm`;
+        document.getElementById("calcS").innerText = `${(a * a).toFixed(2)} cm²`;
+
+      } else if (currentShapeType === 'rectangle') {
+        const a = getVal('in_a'), b = getVal('in_b');
+        const px = a * GRID_SIZE, py = b * GRID_SIZE;
+        pts = [
+          { x: cx - px/2, y: cy + py/2, label: "A" },
+          { x: cx - px/2, y: cy - py/2, label: "D" },
+          { x: cx + px/2, y: cy - py/2, label: "C" },
+          { x: cx + px/2, y: cy + py/2, label: "B" }
+        ];
+        document.getElementById("calcP").innerText = `${(2 * (a + b)).toFixed(2)} cm`;
+        document.getElementById("calcS").innerText = `${(a * b).toFixed(2)} cm²`;
+
+      } else if (currentShapeType === 'rhombus') {
+        const d1 = getVal('in_d1'), d2 = getVal('in_d2');
+        const px = d1 * GRID_SIZE, py = d2 * GRID_SIZE;
+        pts = [
+          { x: cx, y: cy + py/2, label: "A" },
+          { x: cx - px/2, y: cy, label: "D" },
+          { x: cx, y: cy - py/2, label: "C" },
+          { x: cx + px/2, y: cy, label: "B" }
+        ];
+        const side = Math.hypot(d1/2, d2/2);
+        document.getElementById("calcP").innerText = `${(4 * side).toFixed(2)} cm`;
+        document.getElementById("calcS").innerText = `${(0.5 * d1 * d2).toFixed(2)} cm²`;
+
+      } else if (currentShapeType === 'parallelogram') {
+        const a = getVal('in_a'), b = getVal('in_b'), h = getVal('in_h');
+        const px = a * GRID_SIZE, py = h * GRID_SIZE;
+        const offset = Math.sqrt(Math.max(0, b*b - h*h)) * GRID_SIZE || 30;
+        pts = [
+          { x: cx - px/2, y: cy + py/2, label: "A" },
+          { x: cx - px/2 + offset, y: cy - py/2, label: "D" },
+          { x: cx + px/2 + offset, y: cy - py/2, label: "C" },
+          { x: cx + px/2, y: cy + py/2, label: "B" }
+        ];
+        document.getElementById("calcP").innerText = `${(2 * (a + b)).toFixed(2)} cm`;
+        document.getElementById("calcS").innerText = `${(a * h).toFixed(2)} cm²`;
+
+      } else if (currentShapeType === 'trapezoid' || currentShapeType === 'isosceles_trapezoid') {
+        const a = getVal('in_a'), b = getVal('in_b'), h = getVal('in_h');
+        const pa = a * GRID_SIZE, pb = b * GRID_SIZE, py = h * GRID_SIZE;
+        const isIso = currentShapeType === 'isosceles_trapezoid';
+        const offLeft = isIso ? (pb - pa)/2 : (pb - pa)/3;
+        pts = [
+          { x: cx - pb/2, y: cy + py/2, label: "A" },
+          { x: cx - pb/2 + offLeft, y: cy - py/2, label: "D" },
+          { x: cx - pb/2 + offLeft + pa, y: cy - py/2, label: "C" },
+          { x: cx + pb/2, y: cy + py/2, label: "B" }
+        ];
+        const sideC = Math.hypot((pb - pa)/2, h);
+        document.getElementById("calcP").innerText = `${(a + b + 2 * sideC).toFixed(2)} cm (ước tính)`;
+        document.getElementById("calcS").innerText = `${(((a + b) * h) / 2).toFixed(2)} cm²`;
+      }
+      draw();
+    }
+
+    function calculateCustomQuad() {
+      const getVal = id => parseFloat(document.getElementById(id)?.value) || 0;
+      const p = getVal('in_a') + getVal('in_b') + getVal('in_c') + getVal('in_d');
+      document.getElementById("calcP").innerText = `${p.toFixed(2)} cm`;
+      document.getElementById("calcS").innerText = `Cần thêm góc`;
+    }
+
+    function setShapePreset(type) {
+      setupCalculatorInputs(type);
+      updateTheoryInfo(type);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "#f1f5f9";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += GRID_SIZE) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += GRID_SIZE) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pts[1].x, pts[1].y); ctx.lineTo(pts[3].x, pts[3].y); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      pts.forEach(p => {
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = "bold 13px sans-serif";
+        ctx.fillStyle = "#1e293b";
+        ctx.fillText(p.label, p.x + 8, p.y - 6);
+      });
+
+      analyzeShape();
+    }
+
+    canvas.addEventListener("mousedown", e => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      draggingIdx = pts.findIndex(p => Math.hypot(p.x - mx, p.y - my) < 16);
+    });
+
+    window.addEventListener("mousemove", e => {
+      if (draggingIdx >= 0) {
+        const rect = canvas.getBoundingClientRect();
+        pts[draggingIdx].x = Math.max(10, Math.min(canvas.width - 10, e.clientX - rect.left));
+        pts[draggingIdx].y = Math.max(10, Math.min(canvas.height - 10, e.clientY - rect.top));
+        draw();
+      }
+    });
+
+    window.addEventListener("mouseup", () => { draggingIdx = -1; });
+
+    function linesIntersect(p1, p2, p3, p4) {
+      function ccw(A, B, C) { return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x); }
+      return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
+    }
+
+    function analyzeShape() {
+      const d = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y) / GRID_SIZE;
+
+      const A = pts[0], D = pts[1], C = pts[2], B = pts[3];
+      const AD = d(A, D), DC = d(D, C), CB = d(C, B), BA = d(B, A);
+      const AC = d(A, C), BD = d(B, D);
+
+      const perimeter = (AD + DC + CB + BA).toFixed(2);
+      let area = 0.5 * Math.abs(
+        (A.x*D.y - D.x*A.y) + (D.x*C.y - C.x*D.y) + (C.x*B.y - B.x*C.y) + (B.x*A.y - A.x*B.y)
+      ) / (GRID_SIZE * GRID_SIZE);
+      area = area.toFixed(2);
+
+      const badge = document.getElementById("simBadge");
+      const metrics = document.getElementById("simMetrics");
+      const explain = document.getElementById("simExplain");
+
+      metrics.innerText = `AD=${AD.toFixed(2)} DC=${DC.toFixed(2)} CB=${CB.toFixed(2)} BA=${BA.toFixed(2)} cm — P=${perimeter} cm — S=${area} cm²`;
+
+      if (linesIntersect(A, D, C, B) || linesIntersect(D, C, B, A)) {
+        badge.innerHTML = `<span style="color:#dc2626;">⚠️ Tứ giác tự cắt (không hợp lệ)</span>`;
+        explain.innerText = "Các cạnh đang đan chéo cắt nhau. Hãy kéo lại để tạo tứ giác hợp lệ.";
+        return;
+      }
+
+      const vAD = { x: D.x - A.x, y: D.y - A.y };
+      const vBC = { x: C.x - B.x, y: C.y - B.y };
+      const vAB = { x: B.x - A.x, y: B.y - A.y };
+      const vDC = { x: C.x - D.x, y: C.y - D.y };
+
+      const cross = (v1, v2) => Math.abs(v1.x * v2.y - v1.y * v2.x) / (Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y));
+      const dot = (v1, v2) => Math.abs(v1.x * v2.x + v1.y * v2.y) / (Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y));
+      const approx = (a, b, eps = 0.08) => Math.abs(a - b) / Math.max(a, b) < eps;
+
+      const ad_bc_par = cross(vAD, vBC) < 0.05;
+      const ab_dc_par = cross(vAB, vDC) < 0.05;
+
+      const right_angle = dot(vAB, vAD) < 0.06 || dot(vDC, vAD) < 0.06;
+      const all_sides_equal = approx(AD, DC) && approx(DC, CB) && approx(CB, BA);
+      const diag_equal = approx(AC, BD);
+
+      if (ad_bc_par && ab_dc_par) {
+        if (all_sides_equal && right_angle) {
+          badge.innerHTML = `<span style="color:#dc2626;">✅ Hình vuông</span>`;
+          explain.innerText = "Tứ giác có 2 cặp cạnh đối song song, 4 cạnh bằng nhau và góc vuông.";
+        } else if (right_angle || diag_equal) {
+          badge.innerHTML = `<span style="color:#2563eb;">✅ Hình chữ nhật</span>`;
+          explain.innerText = "Hình bình hành có góc vuông hoặc 2 đường chéo bằng nhau.";
+        } else if (all_sides_equal) {
+          badge.innerHTML = `<span style="color:#16a34a;">✅ Hình thoi</span>`;
+          explain.innerText = "Hình bình hành có 4 cạnh bằng nhau và 2 đường chéo vuông góc.";
+        } else {
+          badge.innerHTML = `<span style="color:#9333ea;">✅ Hình bình hành</span>`;
+          explain.innerText = "Tứ giác có 2 cặp cạnh đối song song và bằng nhau.";
+        }
+      } else if (ad_bc_par || ab_dc_par) {
+        if (diag_equal || approx(AD, CB)) {
+          badge.innerHTML = `<span style="color:#ea580c;">✅ Hình thang cân</span>`;
+          explain.innerText = "Hình thang có 2 đường chéo bằng nhau (hoặc 2 cạnh bên bằng nhau).";
+        } else {
+          badge.innerHTML = `<span style="color:#d97706;">✅ Hình thang</span>`;
+          explain.innerText = "Tứ giác có 1 cặp cạnh đối song song.";
+        }
+      } else if ((approx(AD, DC) && approx(AB, CB)) || (approx(AD, BA) && approx(DC, CB))) {
+        badge.innerHTML = `<span style="color:#0284c7;">✅ Hình cánh diều (Kite)</span>`;
+        explain.innerText = "Tứ giác có 2 cặp cạnh kề bằng nhau.";
+      } else {
+        badge.innerHTML = `<span style="color:#475569;">✅ Tứ giác lồi</span>`;
+        explain.innerText = "Tứ giác lồi thông thường.";
+      }
+    }
+
+    // Quiz
+    const quizBank = [
+      { q: "Tứ giác có 2 đường chéo vuông góc và cắt nhau tại trung điểm là hình gì?", opts: ["Hình bình hành", "Hình chữ nhật", "Hình thoi", "Hình thang cân"], a: "Hình thoi", exp: "Hình bình hành có 2 đường chéo vuông góc là Hình thoi." },
+      { q: "Hình bình hành có 2 đường chéo bằng nhau là hình gì?", opts: ["Hình thoi", "Hình chữ nhật", "Hình vuông", "Hình thang"], a: "Hình chữ nhật", exp: "Hình bình hành có 2 đường chéo bằng nhau là Hình chữ nhật." },
+      { q: "Hình thang có 2 góc kề một đáy bằng nhau là hình gì?", opts: ["Hình thang vuông", "Hình thang cân", "Hình bình hành", "Hình thoi"], a: "Hình thang cân", exp: "Hình thang có 2 góc kề một đáy bằng nhau là Hình thang cân." },
+      { q: "Hình chữ nhật có 2 cạnh kề bằng nhau là hình gì?", opts: ["Hình thoi", "Hình vuông", "Hình bình hành", "Hình diều"], a: "Hình vuông", exp: "Hình chữ nhật có 2 cạnh kề bằng nhau là Hình vuông." }
+    ];
+    let qIdx = 0;
+
+    function renderQuestion() {
+      const item = quizBank[qIdx];
+      document.getElementById("qText").innerText = item.q;
+      const optDiv = document.getElementById("qOptions");
+      optDiv.innerHTML = "";
+      item.opts.forEach(opt => {
+        const btn = document.createElement("button");
+        btn.className = "quiz-opt-btn";
+        btn.innerText = opt;
+        btn.onclick = () => {
+          document.querySelectorAll(".quiz-opt-btn").forEach(b => b.disabled = true);
+          const fb = document.getElementById("qFeedback");
+          fb.style.display = "block";
+          if (opt === item.a) {
+            btn.classList.add("correct");
+            fb.className = "quiz-feedback";
+            fb.style.background = "#dcfce7"; fb.style.color = "#15803d";
+            fb.innerHTML = `<strong>Chính xác!</strong> ${item.exp}`;
+          } else {
+            btn.classList.add("wrong");
+            fb.className = "quiz-feedback";
+            fb.style.background = "#fee2e2"; fb.style.color = "#b91c1c";
+            fb.innerHTML = `<strong>Chưa đúng!</strong> Đáp án đúng là <strong>${item.a}</strong>. ${item.exp}`;
+          }
+          document.getElementById("btnNextQuiz").style.display = "inline-block";
+        };
+        optDiv.appendChild(btn);
+      });
+      document.getElementById("qFeedback").style.display = "none";
+      document.getElementById("btnNextQuiz").style.display = "none";
+    }
+
+    function loadNextQuestion() {
+      qIdx = (qIdx + 1) % quizBank.length;
+      renderQuestion();
+    }
+
+    function switchTab(t) {
+      document.getElementById("tabDetail").style.display = t === 'detail' ? 'block' : 'none';
+      document.getElementById("tabQuiz").style.display = t === 'quiz' ? 'block' : 'none';
+      document.getElementById("btnTabDetail").className = t === 'detail' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById("btnTabQuiz").className = t === 'quiz' ? 'tab-btn active' : 'tab-btn';
+      if (t === 'quiz') renderQuestion();
+    }
+
+    // Khởi tạo ban đầu với Hình chữ nhật
+    setupCalculatorInputs('rectangle');
+    loadGraphData();
+  </script>
+</body>
+</html>
